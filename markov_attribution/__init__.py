@@ -7,7 +7,7 @@ from numpy import matrix, identity, subtract, matmul
 from numpy.linalg import inv
 from itertools import islice
 from copy import deepcopy
-
+from pprint import pprint
 
 class MarkovMatrix:
     def __init__(self, matrix_arr):
@@ -176,22 +176,20 @@ class MarkovDB:
             )
 
     def __get_keys(self):
-        keys = set()
-        for row in self.conversions:
-            rstates = row['path'].split(self.separator)
-            for state in rstates:
-                if state != "":
-                    keys.add(state)
-        return ['START'] + sorted(list(keys)) + ['NULL', 'CONVERSION']
+        return ['START'] + sorted(list(self.__get_channels())) + ['NULL', 'CONVERSION']
 
     def __get_channels(self):
         keys = set()
         for row in self.conversions:
             rstates = row['path'].split(self.separator)
             for state in rstates:
-                if state != "":
+                if state != "" and state not in keys:
                     keys.add(state)
-        return sorted(list(keys))
+        try:
+            keys.remove('NULL')
+            return sorted(list(keys))
+        except:
+            return sorted(list(keys))
 
     def __get_db(self):
         states = {}
@@ -234,19 +232,22 @@ class MarkovDB:
         db['CONVERSION']['CONVERSION'] = 1
         db['DELME'] = {}
         del db['DELME']
+        #pprint(db)
         return db
 
     def __get_prob_matrix(self):
         states = self.keys
+        #print('KEYSS',self.keys)
         data = []
         for rkey in states:
             row = []
             for ckey in states:
                 try:
-                    row.append(round(self.db[rkey][ckey], 2))
+                    row.append(self.db[rkey][ckey])
                 except Exception:
                     row.append(0)
             data.append(row)
+        #pprint(data)
         return MarkovMatrix(data)
 
     def get_probability(self, start, end):
@@ -297,7 +298,7 @@ class MarkovAttribution:
         for row in newconversions:
             try:
                 orig = row['path']
-                row['path'] = row['path'].replace(channel, 'DELME')
+                row['path'] = row['path'].replace(channel, 'NULL')
             except Exception:
                 row['path'] = row['path']
         return newconversions
@@ -309,7 +310,11 @@ class MarkovAttribution:
         removal['probability'] = (
             removal['db'].get_probability('START', 'CONVERSION')
         )
-        removal['effect'] = 1 - (removal['probability']/self.full_probability)
+        #pprint(removal)
+        if self.full_probability == 0:
+            removal['effect'] = 0
+        else:
+            removal['effect'] = 1 - (removal['probability']/self.full_probability)
         return removal
 
     def get_removal(self, channel):
